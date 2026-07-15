@@ -90,6 +90,12 @@
     <div class="header-title">🛰️ Frigurso Satelital</div>
     <div class="header-sub" id="origen-texto">Buscando tu ubicación...</div>
   </div>
+  <div class="card" id="viaje-en-curso-card" style="display:none;border-color:var(--accent)">
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Viaje en curso</div>
+    <div class="row-title" style="margin-bottom:10px">🚗 Ibas hacia <span id="viaje-en-curso-destino">—</span></div>
+    <button class="btn-primary" onclick="retomarViajeEnCurso()">Retomar viaje</button>
+    <button class="btn-ghost" onclick="descartarViajeEnCurso()">Descartar</button>
+  </div>
   <div class="card">
     <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">¿A dónde vamos?</div>
     <input class="input" id="destino-input" placeholder="Ej: Buenos Aires" onkeydown="if(event.key==='Enter')buscarDestino()">
@@ -183,10 +189,41 @@ function _rumbo(lat1,lon1,lat2,lon2){
   const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));
   return (toDeg(Math.atan2(y,x))+360)%360;
 }
+let _pantallaActual='buscar';
 function mostrarPantalla(id){
   document.querySelectorAll('.pantalla').forEach(p=>p.classList.remove('active'));
   document.getElementById('pantalla-'+id).classList.add('active');
+  _pantallaActual=id;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// HISTORIAL DE NAVEGACION (para que el botón/gesto "atrás" del celular
+// no cierre la app de una: cada pantalla es una entrada real del
+// historial. En la pantalla de navegación en vivo, además, un "atrás"
+// accidental NO cancela el viaje — hay que usar el botón ✕ a propósito.
+// ═══════════════════════════════════════════════════════════════
+const _PROFUNDIDAD={buscar:0, preview:1, nav:2};
+let _saliendoNavIntencional=false, _extraPushesNav=0;
+function _irAPantalla(id){
+  history.pushState({screen:id, profundidad:_PROFUNDIDAD[id]}, '', '#'+id);
+  if(id==='nav') _extraPushesNav=0;
+  mostrarPantalla(id);
+}
+window.addEventListener('popstate', e=>{
+  if(_pantallaActual==='nav' && !_saliendoNavIntencional){
+    // cada intento de "atrás" durante la navegación en vivo agrega una entrada
+    // más al historial (no lo dejamos irse) — hay que contarlas para que
+    // finalizarViaje() sepa exactamente cuántos pasos retroceder al cerrar
+    history.pushState({screen:'nav', profundidad:2}, '', '#nav');
+    _extraPushesNav++;
+    toast('⬅️ Para salir de la navegación usá el botón ✕');
+    return;
+  }
+  _saliendoNavIntencional=false;
+  const estado=e.state || {screen:'buscar', profundidad:0};
+  if(estado.screen==='buscar'){ DESTINO=null; RUTA=null; }
+  mostrarPantalla(estado.screen);
+});
 
 // ═══════════════════════════════════════════════════════════════
 // ESTADO GLOBAL
@@ -304,7 +341,7 @@ async function _elegirDestino(i){
   const r=_resultadosBusqueda[i];
   if(!r || !ORIGEN){ toast('⚠️ Esperá a que se detecte tu ubicación'); return; }
   DESTINO=r;
-  mostrarPantalla('preview');
+  _irAPantalla('preview');
   document.getElementById('preview-titulo').textContent='Hacia '+r.nombre;
   document.getElementById('preview-sub').textContent='Desde '+ORIGEN.nombre;
   await _calcularYMostrarRuta();
@@ -539,8 +576,54 @@ function _dibujarMarcadoresPreview(){
   });
 }
 function volverABuscar(){
-  mostrarPantalla('buscar');
-  DESTINO=null; RUTA=null;
+  history.back();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VIAJE EN CURSO — guardado en ESTE dispositivo (mismo patrón sin backend
+// que los reportes propios de pozos) para poder retomar la navegación si
+// la app se cierra sola en medio de un viaje largo (Android puede matarla
+// en background por memoria en trayectos de muchas horas)
+// ═══════════════════════════════════════════════════════════════
+const _HORAS_MAX_VIAJE_GUARDADO=20;
+function _guardarViajeEnCurso(){
+  try{
+    localStorage.setItem('sat_viaje_en_curso', JSON.stringify({
+      ORIGEN, DESTINO, RUTA, RADARES_RUTA, COMBUSTIBLE_RUTA, TRAMOS_MALOS_RUTA, ts:Date.now()
+    }));
+  }catch(e){}
+}
+function _borrarViajeEnCurso(){
+  try{ localStorage.removeItem('sat_viaje_en_curso'); }catch(e){}
+  const card=document.getElementById('viaje-en-curso-card');
+  if(card) card.style.display='none';
+}
+function _cargarViajeEnCurso(){
+  try{
+    const raw=localStorage.getItem('sat_viaje_en_curso');
+    if(!raw) return null;
+    const v=JSON.parse(raw);
+    if(!v || !v.ORIGEN || !v.DESTINO || !v.RUTA || !v.ts) return null;
+    if((Date.now()-v.ts)/3600000 > _HORAS_MAX_VIAJE_GUARDADO) return null; // muy viejo, descartado
+    return v;
+  }catch(e){ return null; }
+}
+function _chequearViajeEnCurso(){
+  const v=_cargarViajeEnCurso();
+  if(!v){ _borrarViajeEnCurso(); return; }
+  document.getElementById('viaje-en-curso-destino').textContent=v.DESTINO.nombre;
+  document.getElementById('viaje-en-curso-card').style.display='';
+}
+function retomarViajeEnCurso(){
+  const v=_cargarViajeEnCurso();
+  if(!v){ toast('⚠️ No hay viaje guardado'); _borrarViajeEnCurso(); return; }
+  ORIGEN=v.ORIGEN; DESTINO=v.DESTINO; RUTA=v.RUTA;
+  RADARES_RUTA=v.RADARES_RUTA||[]; COMBUSTIBLE_RUTA=v.COMBUSTIBLE_RUTA||[]; TRAMOS_MALOS_RUTA=v.TRAMOS_MALOS_RUTA||[];
+  REPORTES_PROPIOS_RUTA=_reportesPropiosEnRuta(RUTA.coordenadas, 2);
+  iniciarViaje();
+}
+function descartarViajeEnCurso(){
+  _borrarViajeEnCurso();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -587,7 +670,11 @@ function _pasoActualPara(progresoKm){
   return {actual, siguiente};
 }
 
-const _AUTO_SVG='<svg viewBox="0 0 40 68" width="26" height="44"><g><rect x="4" y="6" width="32" height="56" rx="10" fill="#9b1c1c" stroke="#2a0a0a" stroke-width="1.5"/><rect x="9" y="12" width="22" height="16" rx="4" fill="#bcd8f5" opacity=".9"/><rect x="7" y="34" width="26" height="24" rx="3" fill="#7a1414"/><rect x="7" y="34" width="26" height="24" rx="3" fill="none" stroke="#3a0a0a" stroke-width="1.2"/><circle cx="10" cy="14" r="2.6" fill="#fff6d8"/><circle cx="30" cy="14" r="2.6" fill="#fff6d8"/></g></svg>';
+// Fiat Toro (pickup) vista desde arriba: capó+parabrisas adelante, cabina doble
+// (ventana trasera de pasajeros), espejos laterales, caja con línea de portón
+// atrás. El "frente" apunta hacia arriba del viewBox — así el rumbo del GPS
+// rota el ícono de forma correcta (0° = frente hacia el norte).
+const _AUTO_SVG='<svg viewBox="0 0 40 68" width="26" height="44"><g><rect x="4" y="4" width="32" height="60" rx="9" fill="#9b1c1c" stroke="#2a0a0a" stroke-width="1.5"/><rect x="9" y="10" width="22" height="14" rx="3" fill="#bcd8f5" opacity=".92"/><rect x="10" y="26" width="20" height="8" rx="2" fill="#bcd8f5" opacity=".55"/><rect x="7" y="36" width="26" height="24" rx="3" fill="#7a1414" stroke="#3a0a0a" stroke-width="1.2"/><line x1="7" y1="55" x2="33" y2="55" stroke="#3a0a0a" stroke-width="1.2"/><rect x="0" y="17" width="4" height="8" rx="2" fill="#2a0a0a"/><rect x="36" y="17" width="4" height="8" rx="2" fill="#2a0a0a"/><circle cx="10" cy="12" r="2.4" fill="#fff6d8"/><circle cx="30" cy="12" r="2.4" fill="#fff6d8"/></g></svg>';
 
 function _iniciarMarcadorAuto(lat, lon){
   const icon=L.divIcon({className:'', html:'<div class="auto-icono" id="auto-icono-rot">'+_AUTO_SVG+'</div>', iconSize:[26,44], iconAnchor:[13,22]});
@@ -604,7 +691,8 @@ async function iniciarViaje(){
   if(!navigator.geolocation){ toast('⚠️ GPS no disponible'); return; }
   _precalcularProgreso();
   _avisadosEnEsteViaje={};
-  mostrarPantalla('nav');
+  _guardarViajeEnCurso();
+  _irAPantalla('nav');
   await _cargarLeaflet();
   if(_mapaNav){ _mapaNav.remove(); _mapaNav=null; }
   _mapaNav=L.map('mapa-nav', {zoomControl:false, attributionControl:true});
@@ -617,15 +705,41 @@ async function iniciarViaje(){
   _iniciarMarcadorAuto(ORIGEN.lat, ORIGEN.lon);
   _mapaNav.setView([ORIGEN.lat,ORIGEN.lon], 15);
 
-  if('wakeLock' in navigator){
-    try{ navigator.wakeLock.request('screen'); }catch(e){}
-  }
+  await _pedirWakeLock();
 
   _ultimaLat=ORIGEN.lat; _ultimaLon=ORIGEN.lon;
-  _watchId=navigator.geolocation.watchPosition(_onPosicionActualizada, ()=>{}, {enableHighAccuracy:true, maximumAge:2000, timeout:15000});
+  _gpsConSenal=true;
+  _watchId=navigator.geolocation.watchPosition(_onPosicionActualizada, _onErrorGPS, {enableHighAccuracy:true, maximumAge:2000, timeout:15000});
   toast('🚗 Viaje iniciado');
 }
+
+// el Wake Lock se libera solo cuando la pantalla se apaga o cambiás de app —
+// hay que volver a pedirlo cuando la app vuelve a quedar visible, si no
+// después de un par de minutos con el celular en el bolsillo se apaga la
+// pantalla en medio de la navegación
+let _wakeLock=null;
+async function _pedirWakeLock(){
+  if(!('wakeLock' in navigator)) return;
+  try{ _wakeLock=await navigator.wakeLock.request('screen'); }catch(e){ _wakeLock=null; }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && _pantallaActual==='nav') _pedirWakeLock();
+});
+
+// si se pierde la señal GPS (túnel, zona sin cobertura satelital, etc.) hay
+// que avisar en vez de quedarse callado como si todo siguiera bien
+let _gpsConSenal=true, _ultimoAvisoGPS=0;
+function _onErrorGPS(err){
+  if(_pantallaActual!=='nav') return;
+  _gpsConSenal=false;
+  const ahora=Date.now();
+  if(ahora-_ultimoAvisoGPS<20000) return; // no repetir el aviso cada segundo
+  _ultimoAvisoGPS=ahora;
+  document.getElementById('nav-texto-instruccion').textContent='Sin señal GPS...';
+  toast(err.code===1 ? '⚠️ GPS sin permiso' : '📡 Se perdió la señal GPS — reintentando');
+}
 function _onPosicionActualizada(pos){
+  if(!_gpsConSenal){ _gpsConSenal=true; toast('✅ Señal GPS recuperada'); }
   const {latitude:lat, longitude:lon, heading}=pos.coords;
   const rumbo = (heading!=null && !isNaN(heading)) ? heading : _rumbo(_ultimaLat,_ultimaLon,lat,lon);
   _moverMarcadorAuto(lat, lon, rumbo);
@@ -703,7 +817,12 @@ function toggleCapaMapa(donde){
 function finalizarViaje(){
   if(_watchId!=null){ navigator.geolocation.clearWatch(_watchId); _watchId=null; }
   if('speechSynthesis' in window) window.speechSynthesis.cancel();
+  if(_wakeLock){ _wakeLock.release().catch(()=>{}); _wakeLock=null; }
+  _borrarViajeEnCurso();
+  _saliendoNavIntencional=true;
+  DESTINO=null; RUTA=null;
   mostrarPantalla('buscar');
+  history.go(-(_PROFUNDIDAD.nav+_extraPushesNav)); // vuelve directo a la búsqueda, sin pasar por el preview viejo
   toast('Viaje finalizado');
 }
 
@@ -711,7 +830,9 @@ function finalizarViaje(){
 // ARRANQUE
 // ═══════════════════════════════════════════════════════════════
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+history.replaceState({screen:'buscar', profundidad:0}, '', '#buscar');
 iniciarUbicacionActual();
+_chequearViajeEnCurso();
 </script>
 </body>
 </html>
