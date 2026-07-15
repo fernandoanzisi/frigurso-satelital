@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0a1930">
+<title>Frigurso Satelital</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --bg:#0a1930;--bg2:#0e2340;--bg3:#163256;--card:#102743;--border:#1c3a5a;
+    --text:#eaf1fb;--text2:#a9bcd6;--text3:#6d84a8;
+    --accent:#3b9eff;--accent2:#38bdf8;--gold:#f5b83d;--green:#3ddc84;--red:#f66a6a;
+    --mono:'SF Mono',ui-monospace,Menlo,monospace;
+    --shadow:0 10px 30px -12px rgba(0,0,0,.5);
+    --sab:env(safe-area-inset-bottom,0px);--sat:env(safe-area-inset-top,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overscroll-behavior-y:none}
+  body{padding-top:var(--sat)}
+  .pantalla{display:none;min-height:100vh;padding:16px 16px calc(24px + var(--sab))}
+  .pantalla.active{display:block}
+  .header-title{font-size:22px;font-weight:900;letter-spacing:-.01em;margin-bottom:2px}
+  .header-sub{font-size:13px;color:var(--text3)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow)}
+  .input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:15px}
+  .btn-primary{width:100%;padding:15px;border-radius:14px;background:var(--accent);color:#04152b;font-size:15px;font-weight:800;border:none;margin-bottom:8px}
+  .btn-primary:disabled{opacity:.45}
+  .btn-secondary{width:100%;padding:13px;border-radius:14px;background:var(--bg3);color:var(--text);font-size:14px;font-weight:700;border:1px solid var(--border);margin-bottom:8px}
+  .btn-ghost{width:100%;padding:12px;border-radius:14px;background:transparent;color:var(--text3);font-size:13px;font-weight:600;border:none}
+  .row-item{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border)}
+  .row-item:last-child{border-bottom:none}
+  .row-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;background:rgba(59,158,255,.15)}
+  .row-title{font-size:14px;font-weight:600}
+  .row-sub{font-size:12px;color:var(--text3);margin-top:1px}
+  .pill{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:99px;font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--bg3);color:var(--text2)}
+  .pill.ok{color:var(--green);border-color:rgba(61,220,132,.35)}
+  .pill.warn{color:var(--gold);border-color:rgba(245,184,61,.35)}
+  .pill.bad{color:var(--red);border-color:rgba(246,106,106,.35)}
+  .toast{position:fixed;bottom:calc(20px + var(--sab));left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent);color:#04152b;padding:10px 20px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;transition:all .25s;z-index:9999;white-space:nowrap;pointer-events:none;max-width:88vw;overflow:hidden;text-overflow:ellipsis}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .empty{padding:14px 4px;text-align:center;color:var(--text3);font-size:13px}
+
+  #mapa-preview{width:100%;height:38vh;min-height:220px;border-radius:16px;overflow:hidden;background:var(--bg3);margin-bottom:12px}
+  #mapa-preview .leaflet-control-attribution{background:rgba(16,39,67,.75);color:var(--text2);backdrop-filter:blur(3px);font-size:9px}
+  #mapa-preview .leaflet-bar,#mapa-preview .leaflet-bar a{background:var(--card);border-color:var(--border)!important;color:var(--text)}
+
+  .resumen-ruta{display:flex;gap:10px;margin-bottom:10px}
+  .resumen-box{flex:1;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;text-align:center}
+  .resumen-val{font-size:20px;font-weight:900;font-family:var(--mono)}
+  .resumen-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+
+  /* pantalla de navegacion en vivo, full screen */
+  #pantalla-nav{padding:0;position:relative}
+  #mapa-nav{position:fixed;inset:0;z-index:1}
+  .nav-overlay-top{position:fixed;top:calc(10px + var(--sat));left:10px;right:10px;z-index:20;display:flex;flex-direction:column;gap:8px}
+  .nav-instruccion{background:rgba(10,25,48,.88);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);display:flex;align-items:center;gap:12px}
+  .nav-instruccion-icono{font-size:30px;flex-shrink:0}
+  .nav-instruccion-texto{font-size:15px;font-weight:800;line-height:1.25}
+  .nav-instruccion-dist{font-size:12px;color:var(--accent2);font-weight:700;margin-top:2px}
+  .nav-aviso{background:rgba(245,184,61,.92);color:#241800;border-radius:14px;padding:10px 14px;font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow);animation:aviso-in .25s ease}
+  @keyframes aviso-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  .nav-overlay-bottom{position:fixed;bottom:calc(10px + var(--sab));left:10px;right:10px;z-index:20;display:flex;gap:8px;align-items:flex-end}
+  .nav-datos{flex:1;background:rgba(10,25,48,.88);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:16px;padding:12px 16px;box-shadow:var(--shadow);display:flex;gap:16px}
+  .nav-datos .d{flex:1;text-align:center}
+  .nav-datos .v{font-size:17px;font-weight:900;font-family:var(--mono)}
+  .nav-datos .l{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px}
+  .nav-btn-round{width:52px;height:52px;border-radius:50%;background:rgba(10,25,48,.88);backdrop-filter:blur(8px);border:1px solid var(--border);color:#fff;font-size:19px;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);flex-shrink:0}
+  .nav-btn-round.activo{background:var(--accent);color:#04152b}
+  .nav-controles-top{position:fixed;top:calc(10px + var(--sat));right:10px;z-index:21;display:flex;flex-direction:column;gap:8px}
+
+  .auto-icono{width:26px;height:44px;transition:transform .35s linear}
+  .radar-icono,.fuel-icono,.pozo-icono{width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:14px;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.85)}
+  .radar-icono{background:var(--red)}
+  .fuel-icono{background:var(--green)}
+  .pozo-icono{background:var(--gold)}
+  .pozo-propio-icono{background:#a855f7}
+
+  @keyframes pos-pulso{0%{transform:scale(.5);opacity:.7}100%{transform:scale(2.6);opacity:0}}
+  .pos-halo{position:absolute;inset:0;border-radius:50%;background:var(--accent);animation:pos-pulso 1.8s ease-out infinite}
+</style>
+</head>
+<body>
+
+<!-- PANTALLA 1: BUSCAR DESTINO -->
+<div class="pantalla active" id="pantalla-buscar">
+  <div style="margin-bottom:14px">
+    <div class="header-title">🛰️ Frigurso Satelital</div>
+    <div class="header-sub" id="origen-texto">Buscando tu ubicación...</div>
+  </div>
+  <div class="card">
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">¿A dónde vamos?</div>
+    <input class="input" id="destino-input" placeholder="Ej: Buenos Aires" onkeydown="if(event.key==='Enter')buscarDestino()">
+    <div style="height:8px"></div>
+    <button class="btn-secondary" onclick="buscarDestino()">🔎 Buscar</button>
+  </div>
+  <div class="card" id="destino-resultados-card" style="display:none">
+    <div id="destino-resultados"></div>
+  </div>
+  <div class="card" style="font-size:11px;color:var(--text3)">Rutas reales (OpenStreetMap), mapa satelital real, combustible y radares fijos reales en el camino, alertas de clima real en la ruta. Los radares móviles y el estado exacto de la calzada no se pueden saber de antemano — donde haya dato real de OSM sobre pozos/ripio se muestra, pero no es garantía completa.</div>
+</div>
+
+<!-- PANTALLA 2: PREVIEW DE RUTA -->
+<div class="pantalla" id="pantalla-preview">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+    <button class="nav-btn-round" style="position:static;width:38px;height:38px;font-size:15px" onclick="volverABuscar()">←</button>
+    <div style="flex:1;min-width:0">
+      <div class="header-title" id="preview-titulo" style="font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Ruta</div>
+      <div class="header-sub" id="preview-sub">—</div>
+    </div>
+  </div>
+  <div id="mapa-preview"></div>
+  <div class="resumen-ruta">
+    <div class="resumen-box"><div class="resumen-val" id="resumen-distancia">—</div><div class="resumen-lbl">Distancia</div></div>
+    <div class="resumen-box"><div class="resumen-val" id="resumen-duracion">—</div><div class="resumen-lbl">Duración</div></div>
+    <div class="resumen-box"><div class="resumen-val" id="resumen-llegada">—</div><div class="resumen-lbl">Llegada est.</div></div>
+  </div>
+  <div class="card">
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">En el camino</div>
+    <div id="preview-datos-ruta"><div class="empty">Buscando combustible, radares y estado de la ruta...</div></div>
+  </div>
+  <div class="card" id="preview-clima-card" style="display:none">
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Clima real en el camino</div>
+    <div id="preview-clima"></div>
+  </div>
+  <button class="btn-primary" id="btn-iniciar-viaje" onclick="iniciarViaje()" disabled>🚗 Iniciar viaje</button>
+  <div class="card" style="font-size:11px;color:var(--text3)">La navegación necesita la pantalla prendida y la app abierta — ninguna web puede guiarte con el teléfono bloqueado.</div>
+</div>
+
+<!-- PANTALLA 3: NAVEGACION EN VIVO -->
+<div class="pantalla" id="pantalla-nav">
+  <div id="mapa-nav"></div>
+  <div class="nav-overlay-top">
+    <div class="nav-instruccion">
+      <div class="nav-instruccion-icono" id="nav-icono-instruccion">🚗</div>
+      <div style="flex:1;min-width:0">
+        <div class="nav-instruccion-texto" id="nav-texto-instruccion">Buscando señal GPS...</div>
+        <div class="nav-instruccion-dist" id="nav-dist-instruccion"></div>
+      </div>
+    </div>
+    <div id="nav-avisos"></div>
+  </div>
+  <div class="nav-controles-top">
+    <button class="nav-btn-round" id="btn-capa-nav" onclick="toggleCapaMapa('nav')">🗺️</button>
+    <button class="nav-btn-round activo" id="btn-voz-nav" onclick="toggleVozNav()">🔊</button>
+    <button class="nav-btn-round" onclick="reportarPozoAca()" style="background:rgba(168,85,247,.85)">🕳️</button>
+  </div>
+  <div class="nav-overlay-bottom">
+    <div class="nav-datos">
+      <div class="d"><div class="v" id="nav-restante-km">—</div><div class="l">Km restantes</div></div>
+      <div class="d"><div class="v" id="nav-eta">—</div><div class="l">Llegada</div></div>
+    </div>
+    <button class="nav-btn-round" onclick="finalizarViaje()" style="background:var(--red);color:#fff">✕</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// UTILIDADES BASE
+// ═══════════════════════════════════════════════════════════════
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let _toastT;
+function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>el.classList.remove('show'),2800); }
+async function _fetchConTimeout(url, ms, opts){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(), ms||13000);
+  try{ return await fetch(url, Object.assign({signal:controller.signal}, opts||{})); }
+  finally{ clearTimeout(timer); }
+}
+function _distanciaKm(lat1,lon1,lat2,lon2){
+  const R=6371, toRad=d=>d*Math.PI/180;
+  const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function _rumbo(lat1,lon1,lat2,lon2){
+  const toRad=d=>d*Math.PI/180, toDeg=r=>r*180/Math.PI;
+  const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));
+  const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));
+  return (toDeg(Math.atan2(y,x))+360)%360;
+}
+function mostrarPantalla(id){
+  document.querySelectorAll('.pantalla').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pantalla-'+id).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ═══════════════════════════════════════════════════════════════
+let ORIGEN=null, DESTINO=null, RUTA=null;
+let RADARES_RUTA=[], COMBUSTIBLE_RUTA=[], TRAMOS_MALOS_RUTA=[], ALERTAS_CLIMA_RUTA=[], REPORTES_PROPIOS_RUTA=[];
+let _resultadosBusqueda=[];
+let _avisadosEnEsteViaje={};
+let _vozActiva=true;
+
+// ═══════════════════════════════════════════════════════════════
+// REPORTES PROPIOS DE POZOS/MAL ESTADO (guardados en ESTE dispositivo — no
+// hay servidor compartido todavia, asi que no le sirve a otros usuarios/
+// dispositivos hasta que se decida sumar un backend, igual que quedo
+// pausado con las notificaciones push de Frigurso Clima)
+// ═══════════════════════════════════════════════════════════════
+function _cargarReportesPropios(){
+  try{ return JSON.parse(localStorage.getItem('sat_reportes_propios')||'[]'); }catch(e){ return []; }
+}
+function _guardarReportePropio(lat, lon){
+  const reportes=_cargarReportesPropios();
+  reportes.push({lat, lon, ts:Date.now()});
+  localStorage.setItem('sat_reportes_propios', JSON.stringify(reportes));
+  return reportes;
+}
+function reportarPozoAca(){
+  if(_ultimaLat==null || _ultimaLon==null){ toast('⚠️ Todavía no hay posición GPS'); return; }
+  _guardarReportePropio(_ultimaLat, _ultimaLon);
+  const marker=L.marker([_ultimaLat,_ultimaLon], {icon:L.divIcon({className:'', html:'<div class="pozo-propio-icono pozo-icono">🕳️</div>', iconSize:[24,24]})}).addTo(_mapaNav);
+  toast('🕳️ Guardado en tu celular — te va a avisar si volvés a pasar por acá');
+}
+// filtra los reportes propios a los que estan a menos de X km de la ruta actual, para no
+// arrastrar reportes de otros viajes/lugares que no tienen nada que ver con este camino
+function _reportesPropiosEnRuta(coordenadas, radioKm){
+  const todos=_cargarReportesPropios();
+  const decimado=_decimarRuta(coordenadas, 10);
+  return todos.filter(r => decimado.some(p => _distanciaKm(p[0],p[1],r.lat,r.lon)<=radioKm));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LEAFLET ON-DEMAND (mismo patron ya probado en Frigurso Clima)
+// ═══════════════════════════════════════════════════════════════
+let _leafletCargado=false, _leafletCargando=null;
+function _cargarLeaflet(){
+  if(_leafletCargado) return Promise.resolve();
+  if(_leafletCargando) return _leafletCargando;
+  _leafletCargando=new Promise((resolve,reject)=>{
+    const link=document.createElement('link');
+    link.rel='stylesheet'; link.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+    const script=document.createElement('script');
+    script.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+    script.onload=()=>{ _leafletCargado=true; resolve(); };
+    script.onerror=()=>reject(new Error('No se pudo cargar el mapa'));
+    document.head.appendChild(script);
+  });
+  return _leafletCargando;
+}
+function _capaSatelite(){
+  return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Esri World Imagery'});
+}
+function _capaMapa(){
+  return L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {maxZoom:19, subdomains:'abcd', attribution:'© OpenStreetMap, © CARTO'});
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GEOLOCALIZACION Y BUSQUEDA DE DESTINO (mismo patron probado: vigia
+// propio de timeout porque el navegador no garantiza que getCurrentPosition
+// llame nunca a exito NI a error en navegadores in-app tipo WhatsApp)
+// ═══════════════════════════════════════════════════════════════
+async function _reverseGeocode(lat, lon){
+  try{
+    const res=await _fetchConTimeout('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lon+'&format=json&accept-language=es', 6000);
+    const data=await res.json();
+    const a=data.address||{};
+    return a.city||a.town||a.village||a.suburb||data.display_name||'Tu ubicación';
+  }catch(e){ return 'Tu ubicación'; }
+}
+function iniciarUbicacionActual(){
+  if(!navigator.geolocation){ document.getElementById('origen-texto').textContent='GPS no disponible en este navegador'; return; }
+  let resuelto=false;
+  const vigia=setTimeout(()=>{ if(!resuelto){ resuelto=true; document.getElementById('origen-texto').textContent='No se pudo obtener tu ubicación — reintentá'; } }, 10000);
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    if(resuelto) return; resuelto=true; clearTimeout(vigia);
+    const {latitude:lat, longitude:lon}=pos.coords;
+    const nombre=await _reverseGeocode(lat,lon);
+    ORIGEN={lat,lon,nombre};
+    document.getElementById('origen-texto').textContent='Desde: '+nombre;
+  }, ()=>{
+    if(resuelto) return; resuelto=true; clearTimeout(vigia);
+    document.getElementById('origen-texto').textContent='No se pudo obtener tu ubicación — reintentá';
+  }, {enableHighAccuracy:true, timeout:12000});
+}
+async function _buscarLugarGeocoding(query){
+  const res=await _fetchConTimeout('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(query)+'&count=6&language=es&format=json&country=AR');
+  const data=await res.json();
+  return (data.results||[]).map(r=>({nombre:r.name+(r.admin1?', '+r.admin1:'')+(r.country?', '+r.country:''), lat:r.latitude, lon:r.longitude}));
+}
+async function buscarDestino(){
+  const q=(document.getElementById('destino-input').value||'').trim();
+  if(!q) return;
+  const card=document.getElementById('destino-resultados-card');
+  const el=document.getElementById('destino-resultados');
+  card.style.display='';
+  el.innerHTML='<div class="empty">Buscando...</div>';
+  try{
+    const resultados=await _buscarLugarGeocoding(q);
+    _resultadosBusqueda=resultados;
+    el.innerHTML = resultados.length ? resultados.map((r,i)=>
+      '<div class="row-item" onclick="_elegirDestino('+i+')" style="cursor:pointer"><div class="row-icon">📍</div><div class="row-main"><div class="row-title">'+esc(r.nombre)+'</div></div></div>'
+    ).join('') : '<div class="empty">Sin resultados</div>';
+  }catch(e){ el.innerHTML='<div class="empty">No se pudo buscar — probá de nuevo</div>'; }
+}
+async function _elegirDestino(i){
+  const r=_resultadosBusqueda[i];
+  if(!r || !ORIGEN){ toast('⚠️ Esperá a que se detecte tu ubicación'); return; }
+  DESTINO=r;
+  mostrarPantalla('preview');
+  document.getElementById('preview-titulo').textContent='Hacia '+r.nombre;
+  document.getElementById('preview-sub').textContent='Desde '+ORIGEN.nombre;
+  await _calcularYMostrarRuta();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RUTEO REAL (OSRM, gratis sin clave — servidor de demostracion publico,
+// asi que es un solo viaje por vez, no para uso masivo)
+// ═══════════════════════════════════════════════════════════════
+async function _obtenerRuta(origen, destino){
+  const url='https://router.project-osrm.org/route/v1/driving/'+origen.lon+','+origen.lat+';'+destino.lon+','+destino.lat+'?overview=full&geometries=geojson&steps=true';
+  const res=await _fetchConTimeout(url, 20000);
+  const data=await res.json();
+  if(data.code!=='Ok' || !data.routes || !data.routes.length) throw new Error('Sin ruta');
+  const r=data.routes[0];
+  const coordenadas=r.geometry.coordinates.map(c=>[c[1],c[0]]); // a [lat,lon]
+  const pasos=r.legs[0].steps.map(s=>({
+    texto:_textoInstruccion(s),
+    icono:_iconoInstruccion(s.maneuver),
+    distanciaM:s.distance,
+    lat:s.maneuver.location[1], lon:s.maneuver.location[0]
+  }));
+  return {distanciaKm:r.distance/1000, duracionMin:r.duration/60, coordenadas, pasos};
+}
+const _MODIFICADOR_ES={
+  'uturn':'Dá la vuelta','sharp right':'Girá fuerte a la derecha','right':'Girá a la derecha',
+  'slight right':'Girá levemente a la derecha','straight':'Seguí derecho',
+  'slight left':'Girá levemente a la izquierda','left':'Girá a la izquierda','sharp left':'Girá fuerte a la izquierda'
+};
+function _textoInstruccion(step){
+  const m=step.maneuver, calle=step.name||'';
+  if(m.type==='depart') return 'Salís'+(calle?' por '+calle:'');
+  if(m.type==='arrive') return 'Llegaste a destino';
+  if(m.type==='roundabout'||m.type==='rotary') return 'Entrá a la rotonda'+(m.exit?', salida '+m.exit:'');
+  if(m.type==='merge') return 'Incorporate'+(calle?' a '+calle:'');
+  if(m.type==='fork') return 'En la bifurcación, seguí'+(calle?' hacia '+calle:'');
+  if(m.type==='continue'||m.type==='new name') return 'Continuá'+(calle?' por '+calle:'');
+  const mod=_MODIFICADOR_ES[m.modifier]||'Continuá';
+  return mod+(calle?' hacia '+calle:'');
+}
+function _iconoInstruccion(m){
+  if(m.type==='depart') return '🚗';
+  if(m.type==='arrive') return '🏁';
+  if(m.type==='roundabout'||m.type==='rotary') return '🔄';
+  const mod=m.modifier||'';
+  if(mod.includes('left')) return '⬅️';
+  if(mod.includes('right')) return '➡️';
+  if(mod==='uturn') return '↩️';
+  return '⬆️';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// OVERPASS: combustible, radares fijos y tramos con mal estado reportado
+// a lo largo de la ruta real — no un bbox ancho (traeria cosas de otras
+// rutas), se decima la geometria cada ~5km y se consulta "around" de esos
+// puntos en tandas chicas y SECUENCIALES via GET (el servidor publico de
+// Overpass devuelve 406/429 con POST o con querys around muy largas — se
+// probo en vivo antes de construir esto, no es una suposicion).
+// ═══════════════════════════════════════════════════════════════
+function _decimarRuta(coordenadas, pasoKm){
+  if(!coordenadas.length) return [];
+  const out=[coordenadas[0]];
+  let acumulado=0;
+  for(let i=1;i<coordenadas.length;i++){
+    acumulado+=_distanciaKm(coordenadas[i-1][0],coordenadas[i-1][1],coordenadas[i][0],coordenadas[i][1]);
+    if(acumulado>=pasoKm){ out.push(coordenadas[i]); acumulado=0; }
+  }
+  out.push(coordenadas[coordenadas.length-1]);
+  return out;
+}
+function _chunkArray(arr, tam){
+  const out=[];
+  for(let i=0;i<arr.length;i+=tam) out.push(arr.slice(i,i+tam));
+  return out;
+}
+async function _consultarOverpassChunk(puntos, radioM){
+  const alrededor='around:'+radioM+','+puntos.map(p=>p[0].toFixed(4)+','+p[1].toFixed(4)).join(',');
+  const query='[out:json][timeout:25];(node["highway"="speed_camera"]('+alrededor+');node["amenity"="fuel"]('+alrededor+');way["highway"]["surface"~"unpaved|gravel|dirt|ground"]('+alrededor+');way["highway"]["smoothness"~"bad|very_bad|horrible|very_horrible"]('+alrededor+'););out center tags;';
+  const url='https://overpass-api.de/api/interpreter?data='+encodeURIComponent(query);
+  const res=await _fetchConTimeout(url, 25000);
+  if(!res.ok) throw new Error('overpass '+res.status);
+  return res.json();
+}
+async function _buscarDatosRealesEnRuta(coordenadas){
+  const decimado=_decimarRuta(coordenadas, 5);
+  const chunks=_chunkArray(decimado, 30);
+  const radares=[], combustible=[], tramosMalos=[];
+  const vistos=new Set();
+  for(const chunk of chunks){
+    try{
+      const data=await _consultarOverpassChunk(chunk, 2000);
+      (data.elements||[]).forEach(el=>{
+        const id=el.type+el.id;
+        if(vistos.has(id)) return;
+        vistos.add(id);
+        if(el.tags.highway==='speed_camera'){
+          radares.push({lat:el.lat, lon:el.lon, maxspeed:el.tags.maxspeed||null, ref:el.tags.ref||null});
+        } else if(el.tags.amenity==='fuel'){
+          combustible.push({lat:el.lat, lon:el.lon, nombre:el.tags.brand||el.tags.name||'Estación de servicio'});
+        } else if(el.tags.highway){
+          const centro = el.center || (el.lat!=null ? {lat:el.lat,lon:el.lon} : null);
+          if(centro) tramosMalos.push({lat:centro.lat, lon:centro.lon, motivo: el.tags.smoothness ? 'Reportado en mal estado' : 'Tramo de ripio/tierra', surface:el.tags.surface||null, smoothness:el.tags.smoothness||null});
+        }
+      });
+    }catch(e){ /* si un tramo de consulta falla, seguimos con el resto — mejor datos parciales que nada */ }
+    await new Promise(r=>setTimeout(r,600)); // respeta el uso justo del servidor publico, evita 429
+  }
+  return {radares, combustible, tramosMalos};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLIMA REAL A LO LARGO DE LA RUTA (Open-Meteo, mismo criterio que
+// Frigurso Clima: umbrales propios sobre datos reales, no alerta oficial)
+// ═══════════════════════════════════════════════════════════════
+function _puntosDeMuestreo(coordenadas, cantidad){
+  if(coordenadas.length<=cantidad) return coordenadas;
+  const out=[];
+  for(let i=0;i<cantidad;i++){
+    const idx=Math.round(i*(coordenadas.length-1)/(cantidad-1));
+    out.push(coordenadas[idx]);
+  }
+  return out;
+}
+async function _climaEnPunto(lat, lon){
+  const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,wind_speed_10m,wind_gusts_10m,precipitation,weather_code&timezone=auto';
+  const res=await _fetchConTimeout(url, 10000);
+  return res.json();
+}
+function _alertaClimaPunto(c){
+  if(!c || !c.current) return null;
+  const cu=c.current;
+  if((cu.wind_gusts_10m||0)>=70) return {nivel:'bad', texto:'Ráfagas fuertes de viento ('+Math.round(cu.wind_gusts_10m)+' km/h)'};
+  if((cu.wind_speed_10m||0)>=55) return {nivel:'warn', texto:'Viento fuerte ('+Math.round(cu.wind_speed_10m)+' km/h)'};
+  if([95,96,99].includes(cu.weather_code)) return {nivel:'bad', texto:'Tormenta'};
+  if(cu.temperature_2m<=0) return {nivel:'warn', texto:'Riesgo de hielo ('+Math.round(cu.temperature_2m)+'°)'};
+  if([71,73,75,77,85,86].includes(cu.weather_code)) return {nivel:'warn', texto:'Nieve'};
+  return null;
+}
+async function _climaALoLargoDeLaRuta(coordenadas){
+  const puntos=_puntosDeMuestreo(coordenadas, 6);
+  const alertas=[];
+  for(const p of puntos){
+    try{
+      const c=await _climaEnPunto(p[0], p[1]);
+      const a=_alertaClimaPunto(c);
+      if(a) alertas.push(a);
+    }catch(e){ /* si falla un punto puntual, seguimos con el resto */ }
+  }
+  return alertas;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PANTALLA PREVIEW: calcular ruta, dibujar mapa, buscar datos reales
+// ═══════════════════════════════════════════════════════════════
+let _mapaPreview=null, _capaPreviewActiva=null, _capaPreviewTipo='satelite';
+async function _calcularYMostrarRuta(){
+  document.getElementById('btn-iniciar-viaje').disabled=true;
+  document.getElementById('resumen-distancia').textContent='—';
+  document.getElementById('resumen-duracion').textContent='—';
+  document.getElementById('resumen-llegada').textContent='—';
+  document.getElementById('preview-datos-ruta').innerHTML='<div class="empty">Calculando la ruta real...</div>';
+  document.getElementById('preview-clima-card').style.display='none';
+  try{
+    RUTA=await _obtenerRuta(ORIGEN, DESTINO);
+  }catch(e){
+    document.getElementById('preview-datos-ruta').innerHTML='<div class="empty">No se pudo calcular la ruta — probá de nuevo en un momento</div>';
+    toast('⚠️ No se pudo calcular la ruta');
+    return;
+  }
+  document.getElementById('resumen-distancia').textContent=Math.round(RUTA.distanciaKm)+' km';
+  const horas=Math.floor(RUTA.duracionMin/60), mins=Math.round(RUTA.duracionMin%60);
+  document.getElementById('resumen-duracion').textContent=(horas?horas+'h ':'')+mins+'m';
+  const llegada=new Date(Date.now()+RUTA.duracionMin*60000);
+  document.getElementById('resumen-llegada').textContent=String(llegada.getHours()).padStart(2,'0')+':'+String(llegada.getMinutes()).padStart(2,'0');
+
+  await _dibujarMapaPreview();
+  document.getElementById('btn-iniciar-viaje').disabled=false;
+
+  document.getElementById('preview-datos-ruta').innerHTML='<div class="empty">Buscando combustible, radares y estado de la ruta (puede tardar unos segundos)...</div>';
+  const datos=await _buscarDatosRealesEnRuta(RUTA.coordenadas);
+  RADARES_RUTA=datos.radares; COMBUSTIBLE_RUTA=datos.combustible; TRAMOS_MALOS_RUTA=datos.tramosMalos;
+  REPORTES_PROPIOS_RUTA=_reportesPropiosEnRuta(RUTA.coordenadas, 2);
+  _renderDatosRuta();
+  _dibujarMarcadoresPreview();
+
+  ALERTAS_CLIMA_RUTA=await _climaALoLargoDeLaRuta(RUTA.coordenadas);
+  _renderClimaRuta();
+}
+function _renderDatosRuta(){
+  const el=document.getElementById('preview-datos-ruta');
+  el.innerHTML=
+    '<div class="row-item"><div class="row-icon" style="background:rgba(61,220,132,.15)">⛽</div><div class="row-main"><div class="row-title">'+COMBUSTIBLE_RUTA.length+' estaciones de servicio</div><div class="row-sub">En el camino (OpenStreetMap)</div></div></div>'+
+    '<div class="row-item"><div class="row-icon" style="background:rgba(246,106,106,.15)">📷</div><div class="row-main"><div class="row-title">'+RADARES_RUTA.length+' radares fijos</div><div class="row-sub">Cámaras conocidas — no incluye móviles</div></div></div>'+
+    '<div class="row-item"><div class="row-icon" style="background:rgba(245,184,61,.15)">🕳️</div><div class="row-main"><div class="row-title">'+TRAMOS_MALOS_RUTA.length+' tramos de ripio/mal estado</div><div class="row-sub">Reportado en OpenStreetMap, cobertura parcial</div></div></div>'+
+    (REPORTES_PROPIOS_RUTA.length ? '<div class="row-item"><div class="row-icon" style="background:rgba(168,85,247,.18)">🕳️</div><div class="row-main"><div class="row-title">'+REPORTES_PROPIOS_RUTA.length+' reportados por vos</div><div class="row-sub">Guardados en este celular en un viaje anterior</div></div></div>' : '');
+}
+function _renderClimaRuta(){
+  const card=document.getElementById('preview-clima-card');
+  const el=document.getElementById('preview-clima');
+  if(!ALERTAS_CLIMA_RUTA.length){ card.style.display='none'; return; }
+  card.style.display='';
+  el.innerHTML=ALERTAS_CLIMA_RUTA.map(a=>'<span class="pill '+a.nivel+'" style="margin:3px 4px 3px 0">⚠️ '+esc(a.texto)+'</span>').join('');
+}
+async function _dibujarMapaPreview(){
+  await _cargarLeaflet();
+  if(_mapaPreview){ _mapaPreview.remove(); _mapaPreview=null; }
+  _mapaPreview=L.map('mapa-preview', {zoomControl:true, attributionControl:true});
+  _capaPreviewActiva=_capaSatelite().addTo(_mapaPreview);
+  const linea=L.polyline(RUTA.coordenadas, {color:'#38bdf8', weight:5, opacity:.9}).addTo(_mapaPreview);
+  L.circleMarker([ORIGEN.lat,ORIGEN.lon], {radius:8, color:'#3ddc84', fillColor:'#3ddc84', fillOpacity:1, weight:2}).addTo(_mapaPreview);
+  L.circleMarker([DESTINO.lat,DESTINO.lon], {radius:8, color:'#f66a6a', fillColor:'#f66a6a', fillOpacity:1, weight:2}).addTo(_mapaPreview);
+  _mapaPreview.fitBounds(linea.getBounds(), {padding:[24,24]});
+}
+function _dibujarMarcadoresPreview(){
+  if(!_mapaPreview) return;
+  RADARES_RUTA.forEach(r=>{
+    L.marker([r.lat,r.lon], {icon:L.divIcon({className:'', html:'<div class="radar-icono">📷</div>', iconSize:[24,24]})})
+      .bindPopup('Radar fijo'+(r.maxspeed?' — máx '+r.maxspeed+' km/h':'')+(r.ref?'<br>'+esc(r.ref):''))
+      .addTo(_mapaPreview);
+  });
+  COMBUSTIBLE_RUTA.forEach(f=>{
+    L.marker([f.lat,f.lon], {icon:L.divIcon({className:'', html:'<div class="fuel-icono">⛽</div>', iconSize:[24,24]})})
+      .bindPopup(esc(f.nombre)).addTo(_mapaPreview);
+  });
+  TRAMOS_MALOS_RUTA.forEach(t=>{
+    L.marker([t.lat,t.lon], {icon:L.divIcon({className:'', html:'<div class="pozo-icono">🕳️</div>', iconSize:[24,24]})})
+      .bindPopup(esc(t.motivo)).addTo(_mapaPreview);
+  });
+  REPORTES_PROPIOS_RUTA.forEach(r=>{
+    L.marker([r.lat,r.lon], {icon:L.divIcon({className:'', html:'<div class="pozo-propio-icono pozo-icono">🕳️</div>', iconSize:[24,24]})})
+      .bindPopup('Reportado por vos').addTo(_mapaPreview);
+  });
+}
+function volverABuscar(){
+  mostrarPantalla('buscar');
+  DESTINO=null; RUTA=null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVEGACION EN VIVO
+// ═══════════════════════════════════════════════════════════════
+let _mapaNav=null, _capaNavActiva=null, _autoMarker=null, _watchId=null;
+let _distanciasAcumuladas=[], _distanciaTotalKm=0, _pasosConAcumulado=[];
+let _ultimaLat=null, _ultimaLon=null;
+
+function _precalcularProgreso(){
+  const coords=RUTA.coordenadas;
+  _distanciasAcumuladas=[0];
+  for(let i=1;i<coords.length;i++){
+    _distanciasAcumuladas.push(_distanciasAcumuladas[i-1]+_distanciaKm(coords[i-1][0],coords[i-1][1],coords[i][0],coords[i][1]));
+  }
+  _distanciaTotalKm=_distanciasAcumuladas[_distanciasAcumuladas.length-1];
+  _pasosConAcumulado=RUTA.pasos.map(p=>{
+    let mejorIdx=0, mejorDist=Infinity;
+    for(let i=0;i<coords.length;i+=Math.max(1,Math.floor(coords.length/500))){
+      const d=_distanciaKm(coords[i][0],coords[i][1],p.lat,p.lon);
+      if(d<mejorDist){ mejorDist=d; mejorIdx=i; }
+    }
+    return Object.assign({}, p, {acumuladoKm:_distanciasAcumuladas[mejorIdx]});
+  });
+}
+function _progresoActualKm(lat, lon){
+  const coords=RUTA.coordenadas;
+  let mejorIdx=0, mejorDist=Infinity;
+  const paso=Math.max(1,Math.floor(coords.length/800));
+  for(let i=0;i<coords.length;i+=paso){
+    const d=_distanciaKm(coords[i][0],coords[i][1],lat,lon);
+    if(d<mejorDist){ mejorDist=d; mejorIdx=i; }
+  }
+  return _distanciasAcumuladas[mejorIdx];
+}
+function _pasoActualPara(progresoKm){
+  let actual=_pasosConAcumulado[0];
+  for(let i=0;i<_pasosConAcumulado.length;i++){
+    if(_pasosConAcumulado[i].acumuladoKm<=progresoKm+0.05) actual=_pasosConAcumulado[i];
+    else break;
+  }
+  const idx=_pasosConAcumulado.indexOf(actual);
+  const siguiente=_pasosConAcumulado[idx+1]||null;
+  return {actual, siguiente};
+}
+
+const _AUTO_SVG='<svg viewBox="0 0 40 68" width="26" height="44"><g><rect x="4" y="6" width="32" height="56" rx="10" fill="#9b1c1c" stroke="#2a0a0a" stroke-width="1.5"/><rect x="9" y="12" width="22" height="16" rx="4" fill="#bcd8f5" opacity=".9"/><rect x="7" y="34" width="26" height="24" rx="3" fill="#7a1414"/><rect x="7" y="34" width="26" height="24" rx="3" fill="none" stroke="#3a0a0a" stroke-width="1.2"/><circle cx="10" cy="14" r="2.6" fill="#fff6d8"/><circle cx="30" cy="14" r="2.6" fill="#fff6d8"/></g></svg>';
+
+function _iniciarMarcadorAuto(lat, lon){
+  const icon=L.divIcon({className:'', html:'<div class="auto-icono" id="auto-icono-rot">'+_AUTO_SVG+'</div>', iconSize:[26,44], iconAnchor:[13,22]});
+  _autoMarker=L.marker([lat,lon], {icon, zIndexOffset:1000}).addTo(_mapaNav);
+}
+function _moverMarcadorAuto(lat, lon, rumboDeg){
+  if(!_autoMarker) return;
+  _autoMarker.setLatLng([lat,lon]);
+  const el=document.getElementById('auto-icono-rot');
+  if(el) el.style.transform='rotate('+rumboDeg+'deg)';
+}
+
+async function iniciarViaje(){
+  if(!navigator.geolocation){ toast('⚠️ GPS no disponible'); return; }
+  _precalcularProgreso();
+  _avisadosEnEsteViaje={};
+  mostrarPantalla('nav');
+  await _cargarLeaflet();
+  if(_mapaNav){ _mapaNav.remove(); _mapaNav=null; }
+  _mapaNav=L.map('mapa-nav', {zoomControl:false, attributionControl:true});
+  _capaNavActiva=_capaSatelite().addTo(_mapaNav);
+  L.polyline(RUTA.coordenadas, {color:'#38bdf8', weight:5, opacity:.85}).addTo(_mapaNav);
+  RADARES_RUTA.forEach(r=>L.marker([r.lat,r.lon], {icon:L.divIcon({className:'', html:'<div class="radar-icono">📷</div>', iconSize:[24,24]})}).addTo(_mapaNav));
+  COMBUSTIBLE_RUTA.forEach(f=>L.marker([f.lat,f.lon], {icon:L.divIcon({className:'', html:'<div class="fuel-icono">⛽</div>', iconSize:[24,24]})}).addTo(_mapaNav));
+  TRAMOS_MALOS_RUTA.forEach(t=>L.marker([t.lat,t.lon], {icon:L.divIcon({className:'', html:'<div class="pozo-icono">🕳️</div>', iconSize:[24,24]})}).addTo(_mapaNav));
+  REPORTES_PROPIOS_RUTA.forEach(r=>L.marker([r.lat,r.lon], {icon:L.divIcon({className:'', html:'<div class="pozo-propio-icono pozo-icono">🕳️</div>', iconSize:[24,24]})}).addTo(_mapaNav));
+  _iniciarMarcadorAuto(ORIGEN.lat, ORIGEN.lon);
+  _mapaNav.setView([ORIGEN.lat,ORIGEN.lon], 15);
+
+  if('wakeLock' in navigator){
+    try{ navigator.wakeLock.request('screen'); }catch(e){}
+  }
+
+  _ultimaLat=ORIGEN.lat; _ultimaLon=ORIGEN.lon;
+  _watchId=navigator.geolocation.watchPosition(_onPosicionActualizada, ()=>{}, {enableHighAccuracy:true, maximumAge:2000, timeout:15000});
+  toast('🚗 Viaje iniciado');
+}
+function _onPosicionActualizada(pos){
+  const {latitude:lat, longitude:lon, heading}=pos.coords;
+  const rumbo = (heading!=null && !isNaN(heading)) ? heading : _rumbo(_ultimaLat,_ultimaLon,lat,lon);
+  _moverMarcadorAuto(lat, lon, rumbo);
+  _mapaNav.panTo([lat,lon], {animate:true});
+  _ultimaLat=lat; _ultimaLon=lon;
+
+  const progreso=_progresoActualKm(lat,lon);
+  const restanteKm=Math.max(0, _distanciaTotalKm-progreso);
+  document.getElementById('nav-restante-km').textContent=Math.round(restanteKm);
+  const minRestantes=RUTA.duracionMin*(restanteKm/_distanciaTotalKm||0);
+  const eta=new Date(Date.now()+minRestantes*60000);
+  document.getElementById('nav-eta').textContent=String(eta.getHours()).padStart(2,'0')+':'+String(eta.getMinutes()).padStart(2,'0');
+
+  const {actual, siguiente}=_pasoActualPara(progreso);
+  const objetivo=siguiente||actual;
+  if(objetivo){
+    document.getElementById('nav-icono-instruccion').textContent=objetivo.icono;
+    document.getElementById('nav-texto-instruccion').textContent=objetivo.texto;
+    const distAlPaso=Math.max(0,(objetivo.acumuladoKm-progreso));
+    document.getElementById('nav-dist-instruccion').textContent = distAlPaso<1 ? Math.round(distAlPaso*1000)+' m' : distAlPaso.toFixed(1)+' km';
+    if(distAlPaso<0.15 && !_avisadosEnEsteViaje['paso'+RUTA.pasos.indexOf(objetivo)]){
+      _avisadosEnEsteViaje['paso'+RUTA.pasos.indexOf(objetivo)]=true;
+      _hablar(objetivo.texto);
+    }
+  }
+
+  _chequearProximidad(RADARES_RUTA, lat, lon, 'radar', (r)=>'📷 Radar fijo en '+Math.round(_distanciaKm(lat,lon,r.lat,r.lon)*1000)+' m'+(r.maxspeed?' — máx '+r.maxspeed+' km/h':''));
+  _chequearProximidad(TRAMOS_MALOS_RUTA, lat, lon, 'pozo', (t)=>'🕳️ '+t.motivo+' cerca');
+  _chequearProximidad(REPORTES_PROPIOS_RUTA, lat, lon, 'propio', ()=>'🕳️ Acá marcaste un pozo/mal tramo antes');
+}
+function _chequearProximidad(lista, lat, lon, prefijo, textoFn){
+  lista.forEach((item,i)=>{
+    const clave=prefijo+i;
+    const d=_distanciaKm(lat,lon,item.lat,item.lon);
+    if(d<=0.6 && !_avisadosEnEsteViaje[clave]){
+      _avisadosEnEsteViaje[clave]=true;
+      const texto=textoFn(item);
+      _mostrarAvisoNav(texto);
+      _hablar(texto);
+    }
+  });
+}
+function _mostrarAvisoNav(texto){
+  const el=document.getElementById('nav-avisos');
+  const id='av'+Date.now();
+  el.insertAdjacentHTML('beforeend', '<div class="nav-aviso" id="'+id+'">'+esc(texto)+'</div>');
+  setTimeout(()=>{ const n=document.getElementById(id); if(n) n.remove(); }, 6000);
+}
+function _hablar(texto){
+  if(!_vozActiva || !('speechSynthesis' in window)) return;
+  try{
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(texto);
+    u.lang='es-AR'; u.rate=1;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+function toggleVozNav(){
+  _vozActiva=!_vozActiva;
+  const btn=document.getElementById('btn-voz-nav');
+  btn.textContent=_vozActiva?'🔊':'🔇';
+  btn.classList.toggle('activo', _vozActiva);
+}
+function toggleCapaMapa(donde){
+  const mapa = donde==='nav' ? _mapaNav : _mapaPreview;
+  let capaActiva = donde==='nav' ? _capaNavActiva : _capaPreviewActiva;
+  if(!mapa) return;
+  mapa.removeLayer(capaActiva);
+  const eraSatelite = _capaPreviewTipo==='satelite';
+  const nueva = eraSatelite ? _capaMapa() : _capaSatelite();
+  nueva.addTo(mapa);
+  if(donde==='nav'){ _capaNavActiva=nueva; } else { _capaPreviewActiva=nueva; }
+  _capaPreviewTipo = eraSatelite ? 'mapa' : 'satelite';
+}
+function finalizarViaje(){
+  if(_watchId!=null){ navigator.geolocation.clearWatch(_watchId); _watchId=null; }
+  if('speechSynthesis' in window) window.speechSynthesis.cancel();
+  mostrarPantalla('buscar');
+  toast('Viaje finalizado');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ARRANQUE
+// ═══════════════════════════════════════════════════════════════
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+iniciarUbicacionActual();
+</script>
+</body>
+</html>
