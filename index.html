@@ -19,6 +19,7 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overscroll-behavior-y:none}
+  html,body{overscroll-behavior-y:contain}
   body{padding-top:var(--sat)}
   .pantalla{display:none;min-height:100vh;padding:16px 16px calc(24px + var(--sab))}
   .pantalla.active{display:block}
@@ -80,15 +81,98 @@
 
   @keyframes pos-pulso{0%{transform:scale(.5);opacity:.7}100%{transform:scale(2.6);opacity:0}}
   .pos-halo{position:absolute;inset:0;border-radius:50%;background:var(--accent);animation:pos-pulso 1.8s ease-out infinite}
+
+/* ═══════════════════════════════════════════════════════════════
+   IDENTIDAD FRIGURSO — splash (puro CSS, se va solo) + traba de
+   privacidad simple (contraseña, no cifra datos). Bloque agregado
+   por fuera de la app existente, no toca nada de la lógica de abajo.
+   ═══════════════════════════════════════════════════════════════ */
+#fg-splash{
+  position:fixed;inset:0;z-index:9000;background:#0b1220;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;
+  animation:fg-splash-out .6s ease 2.8s forwards;
+}
+.fg-sash{
+  position:absolute;width:130vw;height:22vh;max-height:170px;
+  background:linear-gradient(90deg,#d7263d 0%,#d7263d 92%,#5fb0e8 100%);
+  transform:rotate(-22deg) translateX(-140vw);top:46%;left:0;margin-top:-11vh;
+  box-shadow:0 0 60px rgba(215,38,61,.3);
+  animation:fg-sash-sweep 1.3s cubic-bezier(.16,.8,.24,1) both;
+}
+@keyframes fg-sash-sweep{0%{transform:rotate(-22deg) translateX(-140vw);}55%{transform:rotate(-22deg) translateX(0);}100%{transform:rotate(-22deg) translateX(0);}}
+@keyframes fg-splash-out{to{opacity:0;pointer-events:none;visibility:hidden;}}
+.fg-wordmark{
+  position:relative;z-index:5;font-weight:800;font-stretch:condensed;
+  font-size:min(11vw,42px);letter-spacing:.02em;
+  color:#f5f7fa;text-transform:uppercase;
+  opacity:0;transform:translateY(10px);animation:fg-word-in .5s ease .85s both;
+}
+@keyframes fg-word-in{to{opacity:1;transform:translateY(0);}}
+.fg-tagline{
+  position:relative;z-index:5;font-family:monospace;font-size:11px;letter-spacing:.18em;
+  text-transform:uppercase;color:#9fb0cc;margin-top:8px;
+  opacity:0;animation:fg-word-in .5s ease 1.05s both;
+}
+#fg-lock{position:fixed;inset:0;z-index:8000;background:#0b1220;display:flex;align-items:center;justify-content:center;padding:24px;}
+.fg-lock-card{width:100%;max-width:380px;}
+.fg-lock-brand{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:30px;font-weight:800;font-stretch:condensed;font-size:15px;letter-spacing:.04em;color:#9fb0cc;text-transform:uppercase;}
+.fg-lock-brand .dot{width:9px;height:9px;border-radius:2px;background:#d7263d;transform:rotate(45deg);flex-shrink:0;}
+.fg-lock-title{font-size:14px;font-weight:700;margin-bottom:4px;color:#e8edf7;}
+.fg-lock-sub{font-size:12px;color:#63739a;margin-bottom:16px;}
+.fg-card{background:#111a2e;border:1px solid #1e2b47;border-radius:12px;padding:20px;}
+.fg-card label{display:block;font-size:12px;color:#9fb0cc;margin-bottom:6px;}
+.fg-card input{width:100%;background:#0e1626;border:1px solid #1e2b47;border-radius:9px;padding:11px 12px;color:#e8edf7;font-size:14px;box-sizing:border-box;}
+.fg-card .field{margin-bottom:14px;}
+.fg-card .btn-block{width:100%;border:none;border-radius:12px;padding:12px 18px;font-weight:700;font-size:13px;background:linear-gradient(135deg,#2dd4bf,#3b82f6);color:#06131f;cursor:pointer;}
+.fg-err{color:#ef4444;font-size:12px;margin:-4px 0 10px;display:none;}
+.fg-switch{text-align:center;margin-top:16px;font-size:12px;color:#63739a;}
+.fg-switch a{color:#2dd4bf;cursor:pointer;text-decoration:underline;}
+@media (prefers-reduced-motion: reduce){
+  .fg-sash{animation:none;transform:rotate(-22deg) translateX(0);}
+  .fg-wordmark,.fg-tagline{animation:none;opacity:1;transform:none;}
+  #fg-splash{animation-delay:.1s;}
+}
 </style>
 </head>
 <body>
 
+<div id="fg-splash" aria-hidden="true">
+  <div class="fg-sash"></div>
+  <div class="fg-wordmark">Frigurso</div>
+  <div class="fg-tagline">Satelital</div>
+</div>
+
+<div id="fg-lock">
+  <div class="fg-lock-card">
+    <div class="fg-lock-brand"><div class="dot"></div><span>Frigurso</span></div>
+
+    <div id="lk-crear" class="fg-card" style="display:block;">
+      <div class="fg-lock-title">Creá tu acceso</div>
+      <div class="fg-lock-sub">Es solo para que nadie más abra la app desde este celular. No cifra los datos.</div>
+      <div class="field"><label>Contraseña (mínimo 4 caracteres)</label><input type="password" id="lk-pass" placeholder="••••••••"></div>
+      <div class="field"><label>Repetir contraseña</label><input type="password" id="lk-pass2" placeholder="••••••••"></div>
+      <div class="fg-err" id="lk-crear-err"></div>
+      <button class="btn-block" onclick="fgCrearAcceso()">Crear y entrar</button>
+    </div>
+
+    <div id="lk-ingresar" class="fg-card" style="display:none;">
+      <div class="fg-lock-title">Ingresá tu contraseña</div>
+      <div class="field"><input type="password" id="lk-pass-in" placeholder="Contraseña" onkeydown="if(event.key==='Enter')fgIngresarAcceso()"></div>
+      <div class="fg-err" id="lk-ing-err"></div>
+      <button class="btn-block" onclick="fgIngresarAcceso()">Ingresar</button>
+      <div class="fg-switch"><a onclick="fgOlvideAcceso()">Olvidé mi contraseña</a></div>
+    </div>
+  </div>
+</div>
+
 <!-- PANTALLA 1: BUSCAR DESTINO -->
 <div class="pantalla active" id="pantalla-buscar">
-  <div style="margin-bottom:14px">
-    <div class="header-title">🛰️ Frigurso Satelital</div>
-    <div class="header-sub" id="origen-texto">Buscando tu ubicación...</div>
+  <div style="margin-bottom:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+    <div>
+      <div class="header-title">🛰️ Frigurso Satelital</div>
+      <div class="header-sub" id="origen-texto">Buscando tu ubicación...</div>
+    </div>
+    <button onclick="fgMostrarLock()" title="Bloquear" style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--border);color:var(--text2);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;">🔒</button>
   </div>
   <div class="card" id="viaje-en-curso-card" style="display:none;border-color:var(--accent)">
     <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Viaje en curso</div>
@@ -833,6 +917,64 @@ if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catc
 history.replaceState({screen:'buscar', profundidad:0}, '', '#buscar');
 iniciarUbicacionActual();
 _chequearViajeEnCurso();
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// IDENTIDAD FRIGURSO — traba de privacidad simple, independiente del
+// resto de la app. No cifra datos, solo tapa la vista hasta que se
+// pone la contraseña. El desbloqueo es una acción del usuario, no
+// un timer, así que si esto tarda en cargar el peor caso es que el
+// botón no responda todavía — nunca queda trabado en silencio. Se
+// recuerda el desbloqueo durante la sesión (sessionStorage) para que
+// una recarga (ej. deslizar para actualizar) no vuelva a pedirla.
+// ═══════════════════════════════════════════════════════════════
+function fgErr(id, msg){ const el = document.getElementById(id); el.textContent = msg; el.style.display = 'block'; }
+function fgHideErr(id){ document.getElementById(id).style.display = 'none'; }
+async function _hashPass(pass){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function fgOcultarLock(){
+  document.getElementById('fg-lock').style.display = 'none';
+  try{ sessionStorage.setItem('sat_unlocked','1'); }catch(e){}
+}
+function fgMostrarLock(){
+  try{ sessionStorage.removeItem('sat_unlocked'); }catch(e){}
+  document.getElementById('lk-pass-in').value = '';
+  fgHideErr('lk-ing-err');
+  document.getElementById('fg-lock').style.display = 'flex';
+}
+async function fgCrearAcceso(){
+  fgHideErr('lk-crear-err');
+  const p1 = document.getElementById('lk-pass').value;
+  const p2 = document.getElementById('lk-pass2').value;
+  if(!p1 || p1.length<4){ fgErr('lk-crear-err','Mínimo 4 caracteres'); return; }
+  if(p1!==p2){ fgErr('lk-crear-err','Las contraseñas no coinciden'); return; }
+  localStorage.setItem('sat_pass_hash', await _hashPass(p1));
+  fgOcultarLock();
+}
+async function fgIngresarAcceso(){
+  fgHideErr('lk-ing-err');
+  const p = document.getElementById('lk-pass-in').value;
+  if((await _hashPass(p)) === localStorage.getItem('sat_pass_hash')){
+    fgOcultarLock();
+  } else {
+    fgErr('lk-ing-err','Contraseña incorrecta');
+  }
+}
+function fgOlvideAcceso(){
+  if(!confirm('Vamos a borrar la contraseña de este celular para que puedas entrar de nuevo. Tus datos NO se borran.\n\n¿Continuar?')) return;
+  localStorage.removeItem('sat_pass_hash');
+  location.reload();
+}
+if(localStorage.getItem('sat_pass_hash')){
+  document.getElementById('lk-crear').style.display = 'none';
+  document.getElementById('lk-ingresar').style.display = 'block';
+  let yaDesbloqueado = false;
+  try{ yaDesbloqueado = sessionStorage.getItem('sat_unlocked') === '1'; }catch(e){}
+  if(yaDesbloqueado) fgOcultarLock();
+}
 </script>
 </body>
 </html>
