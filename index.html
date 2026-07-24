@@ -937,10 +937,10 @@ async function _hashPass(pass){
 }
 function fgOcultarLock(){
   document.getElementById('fg-lock').style.display = 'none';
-  try{ sessionStorage.setItem('sat_unlocked','1'); }catch(e){}
+  try{ localStorage.setItem('sat_unlocked','1'); }catch(e){}
 }
 function fgMostrarLock(){
-  try{ sessionStorage.removeItem('sat_unlocked'); }catch(e){}
+  try{ localStorage.removeItem('sat_unlocked'); }catch(e){}
   document.getElementById('lk-pass-in').value = '';
   fgHideErr('lk-ing-err');
   document.getElementById('fg-lock').style.display = 'flex';
@@ -972,7 +972,7 @@ if(localStorage.getItem('sat_pass_hash')){
   document.getElementById('lk-crear').style.display = 'none';
   document.getElementById('lk-ingresar').style.display = 'block';
   let yaDesbloqueado = false;
-  try{ yaDesbloqueado = sessionStorage.getItem('sat_unlocked') === '1'; }catch(e){}
+  try{ yaDesbloqueado = localStorage.getItem('sat_unlocked') === '1'; }catch(e){}
   if(yaDesbloqueado) fgOcultarLock();
 }
 </script>
