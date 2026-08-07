@@ -1,4 +1,4 @@
-const CACHE = 'satelital-v1';
+const CACHE = 'satelital-v2';
 const PRECACHE = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', e => {

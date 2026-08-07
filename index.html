@@ -172,7 +172,10 @@
       <div class="header-title">🛰️ Frigurso Satelital</div>
       <div class="header-sub" id="origen-texto">Buscando tu ubicación...</div>
     </div>
-    <button onclick="fgMostrarLock()" title="Bloquear" style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--border);color:var(--text2);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;">🔒</button>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button onclick="abrirHistorial()" title="Historial de viajes" style="width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--border);color:var(--text2);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;">🕓</button>
+      <button onclick="fgMostrarLock()" title="Bloquear" style="width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--border);color:var(--text2);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;">🔒</button>
+    </div>
   </div>
   <div class="card" id="viaje-en-curso-card" style="display:none;border-color:var(--accent)">
     <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Viaje en curso</div>
@@ -207,6 +210,17 @@
     <div class="resumen-box"><div class="resumen-val" id="resumen-duracion">—</div><div class="resumen-lbl">Duración</div></div>
     <div class="resumen-box"><div class="resumen-val" id="resumen-llegada">—</div><div class="resumen-lbl">Llegada est.</div></div>
   </div>
+  <div class="card" id="preview-recomendacion-card">
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">¿Conviene viajar?</div>
+    <div id="preview-recomendacion-texto"><div class="empty">Calculando...</div></div>
+  </div>
+  <div class="card">
+    <div style="font-size:12px;color:var(--text3);margin-bottom:2px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Estado oficial de la ruta</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">No hay ninguna app/API en Argentina que dé cortes de ruta en vivo de forma automática — mirá una fuente oficial real y marcá acá lo que dice, así queda guardado en tu recomendación de viaje.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:0 0;margin-bottom:10px" id="preview-fuentes-oficiales"></div>
+    <div id="preview-estado-oficial-botones" style="margin-bottom:6px"></div>
+    <div id="preview-estado-oficial-actual" style="font-size:12px;color:var(--text3)"></div>
+  </div>
   <div class="card">
     <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">En el camino</div>
     <div id="preview-datos-ruta"><div class="empty">Buscando combustible, radares y estado de la ruta...</div></div>
@@ -230,6 +244,13 @@
         <div class="nav-instruccion-dist" id="nav-dist-instruccion"></div>
       </div>
     </div>
+    <div class="nav-instruccion" style="padding:8px 14px;gap:10px">
+      <div style="font-size:15px">📍</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.3px">Estás en</div>
+        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="nav-calle-actual">—</div>
+      </div>
+    </div>
     <div id="nav-avisos"></div>
   </div>
   <div class="nav-controles-top">
@@ -247,6 +268,18 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- OVERLAY: HISTORIAL DE VIAJES (guardado en este celular, no en un servidor) -->
+<div id="overlay-historial" style="display:none;position:fixed;inset:0;z-index:7000;background:var(--bg);overflow-y:auto">
+  <div style="padding:16px 16px calc(24px + var(--sab))">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <button class="nav-btn-round" style="position:static;width:38px;height:38px;font-size:15px" onclick="cerrarHistorial()">←</button>
+      <div style="flex:1"><div class="header-title" style="font-size:18px">🕓 Historial de viajes</div><div class="header-sub">Guardado en este celular</div></div>
+    </div>
+    <div id="historial-lista"></div>
+    <button class="btn-ghost" id="btn-borrar-historial" onclick="borrarHistorialTodo()" style="display:none;margin-top:6px">🗑️ Borrar todo el historial</button>
+  </div>
+</div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
@@ -446,6 +479,7 @@ async function _obtenerRuta(origen, destino){
     texto:_textoInstruccion(s),
     icono:_iconoInstruccion(s.maneuver),
     distanciaM:s.distance,
+    calle:s.name||'',
     lat:s.maneuver.location[1], lon:s.maneuver.location[0]
   }));
   return {distanciaKm:r.distance/1000, duracionMin:r.duration/60, coordenadas, pasos};
@@ -578,6 +612,74 @@ async function _climaALoLargoDeLaRuta(coordenadas){
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ESTADO OFICIAL DE LA RUTA — no existe en Argentina una fuente gratuita
+// con API/CORS habilitado para cortes de ruta en tiempo real (se probó
+// en vivo: dpvneuquen.gov.ar, vialidad.rionegro.gov.ar y ruta0.com no
+// mandan Access-Control-Allow-Origin, así que un fetch desde el celular
+// no puede leer esas páginas sin un servidor propio en el medio). Por
+// eso esto NO inventa una conexión automática: da acceso directo a las
+// fuentes oficiales reales y deja marcar a mano lo que dicen, igual que
+// ya se hace con los reportes propios de pozos.
+// ═══════════════════════════════════════════════════════════════
+const _FUENTES_OFICIALES=[
+  {nombre:'Vialidad Neuquén — Operativo Invierno', url:'https://www.dpvneuquen.gov.ar/category/operativo-nieve/'},
+  {nombre:'Vialidad Rionegrina', url:'https://vialidad.rionegro.gov.ar/'},
+  {nombre:'Ruta0 — reportes de viajeros', url:'https://www.ruta0.com/estado-de-rutas/'},
+  {nombre:'📞 Vialidad Neuquén: 2942 572138', url:'tel:2942572138'}
+];
+let ESTADO_OFICIAL_RUTA=null, ESTADO_OFICIAL_TS=null; // 'habilitada' | 'precaucion' | 'cortada'
+function _renderFuentesOficiales(){
+  const el=document.getElementById('preview-fuentes-oficiales');
+  if(!el) return;
+  el.innerHTML=_FUENTES_OFICIALES.map(f=>
+    '<a href="'+f.url+'" target="_blank" rel="noopener" class="pill" style="text-decoration:none;margin:0 6px 6px 0">'+esc(f.nombre)+' ↗</a>'
+  ).join('');
+}
+function marcarEstadoOficial(estado){
+  ESTADO_OFICIAL_RUTA=estado; ESTADO_OFICIAL_TS=Date.now();
+  _renderEstadoOficial();
+  _renderRecomendacion();
+}
+function _renderEstadoOficial(){
+  const el=document.getElementById('preview-estado-oficial-botones');
+  if(!el) return;
+  const opciones=[['habilitada','✅ Habilitada','ok'],['precaucion','⚠️ Con precaución','warn'],['cortada','🛑 Cortada','bad']];
+  el.innerHTML=opciones.map(([v,txt,nivel])=>
+    '<button class="pill '+(ESTADO_OFICIAL_RUTA===v?nivel:'')+'" style="cursor:pointer;border:1px solid var(--border);margin:3px 4px 0 0" onclick="marcarEstadoOficial(\''+v+'\')">'+txt+'</button>'
+  ).join('');
+  const estadoTxt=document.getElementById('preview-estado-oficial-actual');
+  if(estadoTxt){
+    estadoTxt.textContent = ESTADO_OFICIAL_RUTA ? 'Marcaste: '+({habilitada:'✅ Habilitada',precaucion:'⚠️ Con precaución',cortada:'🛑 Cortada'})[ESTADO_OFICIAL_RUTA]+' — hace '+Math.round((Date.now()-ESTADO_OFICIAL_TS)/60000)+' min' : 'Todavía no marcaste nada — mirá una fuente oficial y marcá acá lo que dice';
+  }
+}
+function _evaluarRiesgoRuta(){
+  const razones=[];
+  let nivel='ok';
+  if(ESTADO_OFICIAL_RUTA==='cortada'){ nivel='bad'; razones.push('Marcaste la ruta como cortada según la fuente oficial'); }
+  if(ALERTAS_CLIMA_RUTA.some(a=>a.nivel==='bad')){ nivel='bad'; }
+  if(nivel!=='bad' && ESTADO_OFICIAL_RUTA==='precaucion'){ nivel='warn'; razones.push('Marcaste la ruta con precaución según la fuente oficial'); }
+  if(nivel!=='bad' && ALERTAS_CLIMA_RUTA.some(a=>a.nivel==='warn')){ if(nivel==='ok') nivel='warn'; }
+  ALERTAS_CLIMA_RUTA.forEach(a=>razones.push(a.texto));
+  if(TRAMOS_MALOS_RUTA.length>3){ if(nivel==='ok') nivel='warn'; razones.push(TRAMOS_MALOS_RUTA.length+' tramos de ripio/mal estado reportados en el camino'); }
+  return {nivel, razones};
+}
+function _renderRecomendacion(){
+  const card=document.getElementById('preview-recomendacion-card');
+  const el=document.getElementById('preview-recomendacion-texto');
+  if(!card||!el) return;
+  const {nivel, razones}=_evaluarRiesgoRuta();
+  card.className='card';
+  const textos={
+    bad:'🛑 No parece un buen momento para este viaje.',
+    warn:'⚠️ Se puede viajar, pero con precaución.',
+    ok:'✅ Sin alertas — condiciones normales para viajar.'
+  };
+  el.innerHTML='<div class="pill '+nivel+'" style="margin-bottom:8px">'+textos[nivel]+'</div>'+
+    (razones.length ? '<div style="font-size:13px;color:var(--text2);line-height:1.5">'+razones.map(r=>'• '+esc(r)).join('<br>')+'</div>' : '')+
+    '<div style="font-size:11px;color:var(--text3);margin-top:8px">Esto combina clima real y ripio/mal estado de OpenStreetMap con lo que hayas marcado vos de la fuente oficial. No reemplaza chequear Vialidad antes de salir, sobre todo en cordillera.</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
 // PANTALLA PREVIEW: calcular ruta, dibujar mapa, buscar datos reales
 // ═══════════════════════════════════════════════════════════════
 let _mapaPreview=null, _capaPreviewActiva=null, _capaPreviewTipo='satelite';
@@ -588,6 +690,11 @@ async function _calcularYMostrarRuta(){
   document.getElementById('resumen-llegada').textContent='—';
   document.getElementById('preview-datos-ruta').innerHTML='<div class="empty">Calculando la ruta real...</div>';
   document.getElementById('preview-clima-card').style.display='none';
+  ESTADO_OFICIAL_RUTA=null; ESTADO_OFICIAL_TS=null;
+  ALERTAS_CLIMA_RUTA=[];
+  _renderFuentesOficiales();
+  _renderEstadoOficial();
+  _renderRecomendacion();
   try{
     RUTA=await _obtenerRuta(ORIGEN, DESTINO);
   }catch(e){
@@ -610,9 +717,11 @@ async function _calcularYMostrarRuta(){
   REPORTES_PROPIOS_RUTA=_reportesPropiosEnRuta(RUTA.coordenadas, 2);
   _renderDatosRuta();
   _dibujarMarcadoresPreview();
+  _renderRecomendacion();
 
   ALERTAS_CLIMA_RUTA=await _climaALoLargoDeLaRuta(RUTA.coordenadas);
   _renderClimaRuta();
+  _renderRecomendacion();
 }
 function _renderDatosRuta(){
   const el=document.getElementById('preview-datos-ruta');
@@ -673,7 +782,7 @@ const _HORAS_MAX_VIAJE_GUARDADO=20;
 function _guardarViajeEnCurso(){
   try{
     localStorage.setItem('sat_viaje_en_curso', JSON.stringify({
-      ORIGEN, DESTINO, RUTA, RADARES_RUTA, COMBUSTIBLE_RUTA, TRAMOS_MALOS_RUTA, ts:Date.now()
+      ORIGEN, DESTINO, RUTA, RADARES_RUTA, COMBUSTIBLE_RUTA, TRAMOS_MALOS_RUTA, ts:Date.now(), inicioTs:_viajeInicioTs
     }));
   }catch(e){}
 }
@@ -704,10 +813,71 @@ function retomarViajeEnCurso(){
   ORIGEN=v.ORIGEN; DESTINO=v.DESTINO; RUTA=v.RUTA;
   RADARES_RUTA=v.RADARES_RUTA||[]; COMBUSTIBLE_RUTA=v.COMBUSTIBLE_RUTA||[]; TRAMOS_MALOS_RUTA=v.TRAMOS_MALOS_RUTA||[];
   REPORTES_PROPIOS_RUTA=_reportesPropiosEnRuta(RUTA.coordenadas, 2);
-  iniciarViaje();
+  iniciarViaje(v.inicioTs||null);
 }
 function descartarViajeEnCurso(){
   _borrarViajeEnCurso();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HISTORIAL DE VIAJES — guardado en ESTE celular (localStorage), sin
+// servidor, mismo criterio que el resto de los datos personales de la
+// app. Se graba un registro por cada viaje que se termina de verdad
+// (finalizarViaje), no por los que se descartan sin arrancar a manejar.
+// ═══════════════════════════════════════════════════════════════
+const _HISTORIAL_MAX=150;
+function _cargarHistorial(){
+  try{ return JSON.parse(localStorage.getItem('sat_historial_viajes')||'[]'); }catch(e){ return []; }
+}
+function _guardarEnHistorial(entrada){
+  const historial=_cargarHistorial();
+  historial.unshift(entrada);
+  localStorage.setItem('sat_historial_viajes', JSON.stringify(historial.slice(0,_HISTORIAL_MAX)));
+}
+function borrarHistorialItem(idx){
+  const historial=_cargarHistorial();
+  historial.splice(idx,1);
+  localStorage.setItem('sat_historial_viajes', JSON.stringify(historial));
+  _renderHistorial();
+}
+function borrarHistorialTodo(){
+  localStorage.removeItem('sat_historial_viajes');
+  _renderHistorial();
+}
+function _formatoFechaHistorial(ts){
+  const d=new Date(ts);
+  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function _formatoDuracionHistorial(min){
+  const h=Math.floor(min/60), m=Math.round(min%60);
+  return (h?h+'h ':'')+m+'m';
+}
+const _NIVEL_ICONO_HISTORIAL={ok:'✅',warn:'⚠️',bad:'🛑'};
+function _renderHistorial(){
+  const historial=_cargarHistorial();
+  const el=document.getElementById('historial-lista');
+  document.getElementById('btn-borrar-historial').style.display = historial.length ? '' : 'none';
+  if(!historial.length){ el.innerHTML='<div class="empty">Todavía no hay viajes guardados</div>'; return; }
+  el.innerHTML=historial.map((v,i)=>
+    '<div class="card" style="margin-bottom:8px">'+
+      '<div style="display:flex;align-items:flex-start;gap:10px">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div class="row-title">🚗 '+esc(v.origen)+' → '+esc(v.destino)+'</div>'+
+          '<div class="row-sub">'+_formatoFechaHistorial(v.fechaInicio)+' · '+Math.round(v.distanciaKm)+' km · '+_formatoDuracionHistorial(v.duracionRealMin)+
+            (v.nivelRiesgo ? ' · '+(_NIVEL_ICONO_HISTORIAL[v.nivelRiesgo]||'') : '')+
+          '</div>'+
+        '</div>'+
+        '<button onclick="borrarHistorialItem('+i+')" style="flex-shrink:0;background:transparent;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:4px">🗑️</button>'+
+      '</div>'+
+    '</div>'
+  ).join('');
+}
+function abrirHistorial(){
+  _renderHistorial();
+  document.getElementById('overlay-historial').style.display='block';
+}
+function cerrarHistorial(){
+  document.getElementById('overlay-historial').style.display='none';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -716,6 +886,7 @@ function descartarViajeEnCurso(){
 let _mapaNav=null, _capaNavActiva=null, _autoMarker=null, _watchId=null;
 let _distanciasAcumuladas=[], _distanciaTotalKm=0, _pasosConAcumulado=[];
 let _ultimaLat=null, _ultimaLon=null;
+let _viajeInicioTs=null;
 
 function _precalcularProgreso(){
   const coords=RUTA.coordenadas;
@@ -742,6 +913,28 @@ function _progresoActualKm(lat, lon){
     if(d<mejorDist){ mejorDist=d; mejorIdx=i; }
   }
   return _distanciasAcumuladas[mejorIdx];
+}
+// nombre de calle/ruta actual: primero el nombre real que ya viene de OSRM
+// para el tramo (step.name); si ese tramo no tiene nombre (común en caminos
+// rurales), se pide de vez en cuando a Nominatim (reverse geocode, mismo
+// servicio que ya se usa para el origen) — nunca más de 1 vez cada 25s para
+// no pasarse de su política de uso justo
+let _ultimoReverseGeocodeNavTs=0, _calleReverseGeocodeCache='';
+async function _actualizarCalleActual(pasoActual, lat, lon){
+  const el=document.getElementById('nav-calle-actual');
+  if(!el) return;
+  if(pasoActual && pasoActual.calle){ el.textContent=pasoActual.calle; _calleReverseGeocodeCache=''; return; }
+  if(_calleReverseGeocodeCache) el.textContent=_calleReverseGeocodeCache;
+  const ahora=Date.now();
+  if(ahora-_ultimoReverseGeocodeNavTs<25000) return;
+  _ultimoReverseGeocodeNavTs=ahora;
+  try{
+    const res=await _fetchConTimeout('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lon+'&format=json&accept-language=es&zoom=16', 6000);
+    const data=await res.json();
+    const a=data.address||{};
+    const calle=a.road||a.pedestrian||a.residential||'';
+    if(calle){ _calleReverseGeocodeCache=calle; if(_pantallaActual==='nav') el.textContent=calle; }
+  }catch(e){ /* si falla, se mantiene el último nombre mostrado */ }
 }
 function _pasoActualPara(progresoKm){
   let actual=_pasosConAcumulado[0];
@@ -771,10 +964,11 @@ function _moverMarcadorAuto(lat, lon, rumboDeg){
   if(el) el.style.transform='rotate('+rumboDeg+'deg)';
 }
 
-async function iniciarViaje(){
+async function iniciarViaje(inicioTsPrevio){
   if(!navigator.geolocation){ toast('⚠️ GPS no disponible'); return; }
   _precalcularProgreso();
   _avisadosEnEsteViaje={};
+  _viajeInicioTs=inicioTsPrevio||Date.now();
   _guardarViajeEnCurso();
   _irAPantalla('nav');
   await _cargarLeaflet();
@@ -838,6 +1032,7 @@ function _onPosicionActualizada(pos){
   document.getElementById('nav-eta').textContent=String(eta.getHours()).padStart(2,'0')+':'+String(eta.getMinutes()).padStart(2,'0');
 
   const {actual, siguiente}=_pasoActualPara(progreso);
+  _actualizarCalleActual(actual, lat, lon);
   const objetivo=siguiente||actual;
   if(objetivo){
     document.getElementById('nav-icono-instruccion').textContent=objetivo.icono;
@@ -902,6 +1097,15 @@ function finalizarViaje(){
   if(_watchId!=null){ navigator.geolocation.clearWatch(_watchId); _watchId=null; }
   if('speechSynthesis' in window) window.speechSynthesis.cancel();
   if(_wakeLock){ _wakeLock.release().catch(()=>{}); _wakeLock=null; }
+  if(ORIGEN && DESTINO && RUTA && _viajeInicioTs){
+    _guardarEnHistorial({
+      origen: ORIGEN.nombre, destino: DESTINO.nombre,
+      distanciaKm: RUTA.distanciaKm, duracionRealMin: (Date.now()-_viajeInicioTs)/60000,
+      fechaInicio: _viajeInicioTs, fechaFin: Date.now(),
+      nivelRiesgo: _evaluarRiesgoRuta().nivel, estadoOficial: ESTADO_OFICIAL_RUTA
+    });
+  }
+  _viajeInicioTs=null;
   _borrarViajeEnCurso();
   _saliendoNavIntencional=true;
   DESTINO=null; RUTA=null;
